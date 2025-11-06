@@ -58,7 +58,10 @@ export default function Navbar() {
                   onMouseEnter={() => setDesktopWorkoutOpen(true)}
                   onMouseLeave={() => setDesktopWorkoutOpen(false)}
                 >
-                  <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gradient-to-r hover:from-red-500 hover:to-purple-600 transition">
+                  <button 
+                    onClick={() => setDesktopWorkoutOpen(!desktopWorkoutOpen)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gradient-to-r hover:from-red-500 hover:to-purple-600 transition"
+                  >
                     {link.icon} {link.name}
                   </button>
                   {desktopWorkoutOpen && (
@@ -67,6 +70,7 @@ export default function Navbar() {
                         <Link
                           key={item.name}
                           to={item.to}
+                          onClick={() => setDesktopWorkoutOpen(false)}
                           className="block w-full px-4 py-2 hover:bg-blue-600 transition"
                         >
                           {item.name}
@@ -141,6 +145,10 @@ export default function Navbar() {
                       <Link
                         key={item.name}
                         to={item.to}
+                        onClick={() => {
+                          setMobileWorkoutOpen(false);
+                          setMenuOpen(false);
+                        }}
                         className="block w-full px-3 py-2 rounded-lg hover:bg-blue-500 transition"
                       >
                         {item.name}
@@ -153,6 +161,7 @@ export default function Navbar() {
               <Link
                 key={link.name}
                 to={link.to}
+                onClick={() => setMenuOpen(false)}
                 className="block w-full px-3 py-2 rounded-lg hover:bg-teal-500 transition"
               >
                 {link.name}

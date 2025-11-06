@@ -1,18 +1,36 @@
 import { useEffect, useState } from "react";
 import { Dumbbell, Calendar, Target, Flame, Clock, ArrowRight, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard({ userData }) {
+  const { user: authUser, loading } = useAuth();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
     if (userData) {
       setUser(userData);
+    } else if (authUser) {
+      setUser(authUser);
     } else {
       const storedUser = localStorage.getItem("user");
-      if (storedUser) setUser(JSON.parse(storedUser));
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {
+          console.error("Failed to parse stored user:", e);
+        }
+      }
     }
-  }, [userData]);
+  }, [userData, authUser]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-black">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <p className="text-white text-center mt-10">No user found. Please login.</p>;
