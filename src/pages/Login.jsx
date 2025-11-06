@@ -10,9 +10,10 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const remembered = JSON.parse(localStorage.getItem("rememberMe"));
+    const remembered = JSON.parse(localStorage.getItem("rememberMe") || "null");
     if (remembered?.email) {
       setEmail(remembered.email);
       setRemember(true);
@@ -21,33 +22,49 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+
     try {
-      const user = await login(email, password);
-      if (remember) {
-        localStorage.setItem("rememberMe", JSON.stringify({ email }));
+      const result = await login(email, password);
+
+      if (result.success) {
+        if (remember) {
+          localStorage.setItem("rememberMe", JSON.stringify({ email }));
+        } else {
+          localStorage.removeItem("rememberMe");
+        }
+
+        Swal.fire({
+          icon: "success",
+          title: `Welcome back, ${result.user.username}!`,
+          text: `Email: ${result.user.email}`,
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+        });
+
+        navigate("/dashboard");
       } else {
-        localStorage.removeItem("rememberMe");
+        Swal.fire({
+          icon: "error",
+          title: "Login failed",
+          text: result.error || "Invalid email or password",
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+        });
       }
-
-      Swal.fire({
-        icon: "success",
-        title: `Welcome back, ${user.name}!`,
-        text: `Email: ${user.email}`,
-        confirmButtonText: "OK",
-        background: "#1f2937",
-        color: "#fff",
-      });
-
-      navigate("/dashboard");
     } catch (err) {
       Swal.fire({
         icon: "error",
         title: "Login failed",
-        text: err.message,
+        text: err.message || "An error occurred",
         confirmButtonText: "OK",
         background: "#1f2937",
         color: "#fff",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,7 +82,8 @@ const Login = () => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
         <input
@@ -74,7 +92,8 @@ const Login = () => {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
         <div className="flex items-center justify-between text-sm mb-6">
@@ -83,6 +102,7 @@ const Login = () => {
               type="checkbox"
               checked={remember}
               onChange={() => setRemember(!remember)}
+              disabled={loading}
               className="w-4 h-4 rounded accent-pink-500"
             />
             Remember me
@@ -98,13 +118,14 @@ const Login = () => {
 
         <button
           type="submit"
-          className="w-full bg-gradient-to-r from-pink-500 to-orange-500 py-3 rounded-lg font-semibold text-lg hover:opacity-90 transition"
+          disabled={loading}
+          className="w-full bg-gradient-to-r from-pink-500 to-orange-500 py-3 rounded-lg font-semibold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
 
         <p className="text-center text-gray-400 mt-6">
-          Don’t have an account?{" "}
+          Don't have an account?{" "}
           <Link to="/register" className="text-pink-400 hover:underline">
             Register
           </Link>

@@ -1,9 +1,12 @@
 // pages/Diet.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { dietAPI } from "../api";
+import Swal from "sweetalert2";
 
 export function DietPlanPage() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     age: "",
     gender: "",
@@ -34,9 +37,56 @@ export function DietPlanPage() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate("/diet-result", { state: formData });
+    setLoading(true);
+
+    try {
+      // Convert form data to match backend API format
+      const apiData = {
+        age: parseInt(formData.age),
+        gender: formData.gender,
+        weight: parseFloat(formData.weight),
+        height: parseFloat(formData.height),
+        activity_level: formData.activity_level,
+        goal: formData.goal,
+        diet_type: formData.diet_type,
+        duration: formData.duration || "1_month",
+        ...(formData.veg_type && { veg_type: formData.veg_type }),
+        ...(formData.cuisine && { cuisine: formData.cuisine }),
+        ...(formData.taste && { taste: formData.taste }),
+        ...(formData.mood_food && { mood_food: formData.mood_food }),
+        ...(formData.health_conditions.length > 0 && {
+          health_conditions: formData.health_conditions,
+        }),
+      };
+
+      const response = await dietAPI.generate(apiData);
+      const dietPlan = response.data.diet_plan;
+
+      // Navigate to result page with both formData and dietPlan
+      navigate("/diet-result", {
+        state: {
+          formData: formData,
+          dietPlan: dietPlan.plan,
+        },
+      });
+    } catch (error) {
+      console.error("Diet plan generation error:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Generation Failed",
+        text:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to generate diet plan. Please try again.",
+        confirmButtonText: "OK",
+        background: "#1f2937",
+        color: "#fff",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -273,9 +323,17 @@ export function DietPlanPage() {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 shadow-lg hover:scale-105 transition-transform"
+          disabled={loading}
+          className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
-          Generate Diet Plan 🚀
+          {loading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <span>Generating Plan...</span>
+            </div>
+          ) : (
+            "Generate Diet Plan 🚀"
+          )}
         </button>
       </form>
     </section>

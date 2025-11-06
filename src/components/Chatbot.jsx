@@ -2,12 +2,14 @@
 import { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Paperclip, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { chatbotAPI } from "../api";
 
 export default function Chatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [recording, setRecording] = useState(false);
+  const [loading, setLoading] = useState(false);
   const mediaRef = useRef(null);
 
   // Predefined suggestions
@@ -19,24 +21,34 @@ export default function Chatbot() {
     "Challenges",
   ];
 
-  // Load saved messages from localStorage
+  // Load chat history from backend on mount
   useEffect(() => {
-    const saved = localStorage.getItem("chatbotMessages");
-    if (saved) setMessages(JSON.parse(saved));
-    else
-      setMessages([
-        {
-          sender: "bot",
-          type: "text",
-          text: "Hi! I’m your Fitness Assistant 🤖. How can I help you today?",
-        },
-      ]);
+    loadChatHistory();
+    setMessages([
+      {
+        sender: "bot",
+        type: "text",
+        text: "Hi! I'm your AI Fitness Assistant 🤖. I can help you with diet and nutrition questions. How can I help you today?",
+      },
+    ]);
   }, []);
 
-  // Save messages on change
-  useEffect(() => {
-    localStorage.setItem("chatbotMessages", JSON.stringify(messages));
-  }, [messages]);
+  const loadChatHistory = async () => {
+    try {
+      const response = await chatbotAPI.getHistory({ per_page: 10 });
+      if (response.data.queries && response.data.queries.length > 0) {
+        const historyMessages = response.data.queries
+          .reverse()
+          .flatMap((query) => [
+            { sender: "user", type: "text", text: query.question },
+            { sender: "bot", type: "text", text: query.answer },
+          ]);
+        setMessages((prev) => [...historyMessages, ...prev]);
+      }
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+    }
+  };
 
   // Play bot voice
   const speak = (text) => {
@@ -47,26 +59,30 @@ export default function Chatbot() {
     }
   };
 
-  const handleSend = (text, type = "text") => {
-    if (!text) return;
+  const handleSend = async (text, type = "text") => {
+    if (!text || loading) return;
 
-    const newMsg = { sender: "user", type, text };
-    setMessages([...messages, newMsg]);
-    setInput("");
-
-    setTimeout(() => {
+    // Handle navigation commands (don't send to API)
+    const lowerText = text.toLowerCase();
+    if (
+      lowerText === "view my goals" ||
+      lowerText === "start meditation" ||
+      lowerText === "start yoga" ||
+      lowerText === "diet plan help" ||
+      lowerText === "challenges"
+    ) {
       let response = "";
-      switch (text.toLowerCase()) {
+      switch (lowerText) {
         case "view my goals":
           response = "Redirecting you to your Goals 🏆";
           window.location.href = "/dashboard";
           break;
         case "start meditation":
-          response = "Let’s start Meditation 🧘‍♂️";
+          response = "Let's start Meditation 🧘‍♂️";
           window.location.href = "/workout/meditation";
           break;
         case "start yoga":
-          response = "Let’s start Yoga 🧘‍♀️";
+          response = "Let's start Yoga 🧘‍♀️";
           window.location.href = "/workout/yoga";
           break;
         case "diet plan help":
@@ -77,16 +93,57 @@ export default function Chatbot() {
           response = "Check your Fitness Challenges 🔥";
           window.location.href = "/workout/challenges";
           break;
-        default:
-          response = "Got it! Keep going with your plan 💪";
       }
-
+      const newMsg = { sender: "user", type, text };
+      setMessages((prev) => [...prev, newMsg]);
       setMessages((prev) => [
         ...prev,
         { sender: "bot", type: "text", text: response },
       ]);
-      speak(response);
-    }, 800);
+      return;
+    }
+
+    // For text messages, send to backend API
+    if (type === "text") {
+      const newMsg = { sender: "user", type, text };
+      setMessages((prev) => [...prev, newMsg]);
+      setInput("");
+      setLoading(true);
+
+      try {
+        const response = await chatbotAPI.sendQuery({
+          question: text,
+          query_type: "diet",
+        });
+
+        const botResponse = {
+          sender: "bot",
+          type: "text",
+          text: response.data.answer,
+        };
+
+        setMessages((prev) => [...prev, botResponse]);
+        speak(response.data.answer);
+      } catch (error) {
+        console.error("Chatbot error:", error);
+        const errorMsg = {
+          sender: "bot",
+          type: "text",
+          text:
+            error.response?.data?.error ||
+            error.response?.data?.message ||
+            "I'm sorry, I can only answer diet and nutrition questions. Please ask me about food, meals, or nutrition! 🍎",
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // For images and voice, just add to messages
+      const newMsg = { sender: "user", type, text };
+      setMessages((prev) => [...prev, newMsg]);
+      setInput("");
+    }
   };
 
   // Handle file uploads (images)
@@ -171,6 +228,16 @@ export default function Chatbot() {
                   )}
                 </div>
               ))}
+              {loading && (
+                <div className="text-left">
+                  <div className="inline-block p-3 md:p-4 rounded-2xl bg-green-700 text-white">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>AI is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Predefined buttons */}
@@ -192,9 +259,10 @@ export default function Chatbot() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend(input)}
+                onKeyDown={(e) => e.key === "Enter" && !loading && handleSend(input)}
                 placeholder="Type a message..."
-                className="flex-1 bg-gray-800 text-white rounded-3xl px-4 py-3 md:px-5 md:py-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+                className="flex-1 bg-gray-800 text-white rounded-3xl px-4 py-3 md:px-5 md:py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               />
               <label className="cursor-pointer">
                 <Paperclip className="text-white w-6 h-6 md:w-7 md:h-7" />

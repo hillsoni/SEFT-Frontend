@@ -7,34 +7,60 @@ const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    mobile_number: "",
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+
     try {
-      const user = await register(name, email, password);
+      const result = await register(formData);
 
-      Swal.fire({
-        icon: "success",
-        title: `Welcome, ${user.name}!`,
-        text: "Account created successfully.",
-        confirmButtonText: "OK",
-        background: "#1f2937",
-        color: "#fff",
-      });
+      if (result.success) {
+        Swal.fire({
+          icon: "success",
+          title: `Welcome, ${result.user.username}!`,
+          text: "Account created successfully.",
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+        });
 
-      navigate("/dashboard");
+        navigate("/dashboard");
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Registration failed",
+          text: result.error || "An error occurred",
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+        });
+      }
     } catch (err) {
       Swal.fire({
         icon: "error",
         title: "Registration failed",
-        text: err.message,
+        text: err.message || "An error occurred",
         confirmButtonText: "OK",
         background: "#1f2937",
         color: "#fff",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,36 +74,53 @@ const Register = () => {
 
         <input
           type="text"
-          placeholder="Full Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          name="username"
+          placeholder="Username"
+          value={formData.username}
+          onChange={handleChange}
           required
-          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
         <input
           type="email"
+          name="email"
           placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={formData.email}
+          onChange={handleChange}
           required
-          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
         <input
           type="password"
+          name="password"
           placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={formData.password}
+          onChange={handleChange}
           required
-          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
+        />
+
+        <input
+          type="tel"
+          name="mobile_number"
+          placeholder="Mobile Number (Optional)"
+          value={formData.mobile_number}
+          onChange={handleChange}
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
         <button
           type="submit"
-          className="w-full bg-gradient-to-r from-pink-500 to-orange-500 py-3 rounded-lg font-semibold text-lg hover:opacity-90 transition"
+          disabled={loading}
+          className="w-full bg-gradient-to-r from-pink-500 to-orange-500 py-3 rounded-lg font-semibold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Register
+          {loading ? "Creating Account..." : "Register"}
         </button>
 
         <p className="text-center text-gray-400 mt-6">

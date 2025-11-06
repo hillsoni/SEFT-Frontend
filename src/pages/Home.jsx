@@ -28,7 +28,7 @@ export default function Home() {
               Get personalized workouts, nutrition guidance, and 24/7 AI coaching tailored to your goals and lifestyle.
             </p>
             <Link
-              to="/personalized"
+              to="/register"
               className="inline-block bg-gradient-to-r from-blue-500 to-purple-500 px-8 py-3 rounded-xl font-semibold text-white shadow-lg hover:scale-105 hover:shadow-pink-500/50 transition-transform"
             >
               Start Your Journey 🚀
@@ -108,7 +108,7 @@ export default function Home() {
               Get customized meal plans tailored to your body type, goals, and preferences with AI-powered nutrition.
             </p>
             <Link
-              to="/dietplan"
+              to="/diet"
               className="bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-2 rounded-lg font-semibold text-white hover:scale-105 hover:shadow-lg transition-transform"
             >
               Learn More

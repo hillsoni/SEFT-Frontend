@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import Home from "./pages/Home";
@@ -13,12 +14,21 @@ import Yoga from "./components/Yoga";
 import Meditation from "./components/Meditation";
 import ChallengesPage from "./components/Challenges";
 import Dashboard from "./pages/Dashboard";
-import Chatbot from "./components/Chatbot"; // <-- Import chatbot
+import Chatbot from "./components/Chatbot";
 
 // --- Private Route Wrapper ---
 function PrivateRoute({ element }) {
-  const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
-  return isLoggedIn ? element : <Navigate to="/login" replace />;
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-black">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  return user ? element : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -67,7 +77,7 @@ export default function App() {
         />
       </Routes>
       <Footer />
-      <Chatbot /> {/* <-- Add chatbot here so it's on all pages */}
+      <Chatbot />
     </div>
   );
 }
