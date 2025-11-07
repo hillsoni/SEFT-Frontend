@@ -1,18 +1,25 @@
 // Chatbot.jsx
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Paperclip, Mic } from "lucide-react";
+import { MessageSquare, X, Paperclip, Mic, Minimize2, Maximize2, Save, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { chatbotAPI } from "../api";
 import { extractUserInfo } from "../utils/infoExtractor";
 import { useChatbot } from "../context/ChatbotContext";
+import Swal from "sweetalert2";
 
 export default function Chatbot() {
   const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [savingChat, setSavingChat] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const mediaRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const dietInfoRef = useRef({});
   const { updateExtractedInfo, extractedInfo } = useChatbot();
   
@@ -42,6 +49,30 @@ export default function Chatbot() {
     "Challenges",
   ];
 
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current && !minimized) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, minimized]);
+
+  // Handle scroll detection for scroll buttons
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || minimized) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      setShowScrollTop(scrollTop > 100);
+      setShowScrollBottom(scrollTop < scrollHeight - clientHeight - 100);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    handleScroll(); // Check initial state
+
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [minimized, messages.length]);
+
   // Load chat history from backend on mount
   useEffect(() => {
     loadChatHistory();
@@ -53,6 +84,102 @@ export default function Chatbot() {
       },
     ]);
   }, []);
+
+  // Scroll functions
+  const scrollToTop = (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const scrollToBottom = (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    } else if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
+  };
+
+  // Save chat history
+  const saveChatHistory = async () => {
+    setSavingChat(true);
+    try {
+      // Chat history is already saved automatically when sending queries
+      // This function can be used to explicitly save or export
+      Swal.fire({
+        icon: "success",
+        title: "Chat Saved!",
+        text: "Your chat history has been saved automatically.",
+        confirmButtonText: "OK",
+        background: "#1f2937",
+        color: "#fff",
+        timer: 2000,
+      });
+    } catch (error) {
+      console.error("Error saving chat:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to save chat history.",
+        confirmButtonText: "OK",
+        background: "#1f2937",
+        color: "#fff",
+      });
+    } finally {
+      setSavingChat(false);
+    }
+  };
+
+  // Clear chat history
+  const clearChatHistory = async () => {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Clear Chat?",
+      text: "Are you sure you want to clear all chat messages? This cannot be undone.",
+      showCancelButton: true,
+      confirmButtonText: "Yes, clear it",
+      cancelButtonText: "Cancel",
+      background: "#1f2937",
+      color: "#fff",
+      confirmButtonColor: "#ef4444",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await chatbotAPI.clearHistory({});
+        setMessages([
+          {
+            sender: "bot",
+            type: "text",
+            text: "Hi! I'm your AI Fitness Assistant 🤖. I can help you with fitness, diet, workouts, and yoga questions. Say 'generate diet plan' and I'll guide you through creating a personalized diet plan! How can I help you today?",
+          },
+        ]);
+        Swal.fire({
+          icon: "success",
+          title: "Cleared!",
+          text: "Chat history has been cleared.",
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+          timer: 1500,
+        });
+      } catch (error) {
+        console.error("Error clearing chat:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to clear chat history.",
+          confirmButtonText: "OK",
+          background: "#1f2937",
+          color: "#fff",
+        });
+      }
+    }
+  };
 
   // Start diet plan collection flow
   const startDietPlanCollection = () => {
@@ -87,6 +214,9 @@ export default function Chatbot() {
       sender: "bot",
       type: "text",
       text: `${question.question}`,
+      questionType: question.type,
+      options: question.options || null,
+      questionKey: question.key,
     };
     setMessages((prev) => [...prev, questionMsg]);
     setCurrentQuestionIndex(index);
@@ -140,10 +270,19 @@ export default function Chatbot() {
     updateExtractedInfo({ [question.key]: value });
 
     // Confirm and move to next question
+    let displayValue = value;
+    if (question.type === 'select') {
+      // Format select values nicely
+      displayValue = String(value)
+        .replace(/_/g, ' ')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
     const confirmMsg = {
       sender: "bot",
       type: "text",
-      text: `Got it! ${question.key.replace('_', ' ')}: ${value} ✓`,
+      text: `Got it! ${question.key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}: ${displayValue} ✓`,
     };
     setMessages((prev) => [...prev, confirmMsg]);
 
@@ -175,20 +314,53 @@ export default function Chatbot() {
       const response = await dietAPI.generate(planData);
       const dietPlan = response.data.diet_plan;
 
+      // Show success message
       const successMsg = {
         sender: "bot",
         type: "text",
-        text: "🎉 Your personalized diet plan has been generated successfully! I'm redirecting you to the Diet page to see your plan. Would you like me to help you with anything else?",
+        text: "🎉 Your personalized diet plan has been generated successfully! Here's your plan:",
       };
       setMessages((prev) => [...prev, successMsg]);
 
+      // Display the diet plan in chat
+      let planText = '';
+      if (dietPlan.plan?.meal_plan) {
+        planText = typeof dietPlan.plan.meal_plan === 'string' 
+          ? dietPlan.plan.meal_plan 
+          : JSON.stringify(dietPlan.plan.meal_plan, null, 2);
+      } else if (dietPlan.plan) {
+        planText = typeof dietPlan.plan === 'string' 
+          ? dietPlan.plan 
+          : JSON.stringify(dietPlan.plan, null, 2);
+      } else {
+        planText = JSON.stringify(dietPlan, null, 2);
+      }
+      
+      const planMsg = {
+        sender: "bot",
+        type: "text",
+        text: planText,
+      };
+      setMessages((prev) => [...prev, planMsg]);
+      
+      // Auto-scroll to bottom to show the plan
+      setTimeout(() => {
+        const messagesContainer = document.querySelector('.overflow-y-auto');
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+      }, 100);
+
+      // Add option to view full plan on diet page
+      const viewFullPlanMsg = {
+        sender: "bot",
+        type: "text",
+        text: "💡 You can also view the full detailed plan on the Diet page. Would you like me to redirect you there?",
+      };
+      setMessages((prev) => [...prev, viewFullPlanMsg]);
+
       // Update extracted info with all collected data
       updateExtractedInfo(planData);
-
-      // Navigate to diet page after a short delay
-      setTimeout(() => {
-        window.location.href = "/diet";
-      }, 2000);
 
       setIsCollectingDietInfo(false);
       setCurrentQuestionIndex(-1);
@@ -245,6 +417,7 @@ export default function Chatbot() {
         lowerText.includes('diet plan') && (lowerText.includes('generate') || lowerText.includes('create') || lowerText.includes('make'))) {
       const newMsg = { sender: "user", type, text };
       setMessages((prev) => [...prev, newMsg]);
+      setInput(""); // Clear input
       startDietPlanCollection();
       return;
     }
@@ -253,6 +426,7 @@ export default function Chatbot() {
     if (isCollectingDietInfo && currentQuestionIndex >= 0) {
       const newMsg = { sender: "user", type, text };
       setMessages((prev) => [...prev, newMsg]);
+      setInput(""); // Clear input immediately
       processDietAnswer(text, currentQuestionIndex);
       return;
     }
@@ -387,39 +561,158 @@ export default function Chatbot() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-auto">
       <AnimatePresence>
         {open && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="w-[360px] sm:w-[420px] md:w-[480px] lg:w-[520px] bg-black rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            className="w-[360px] sm:w-[420px] md:w-[480px] lg:w-[520px] bg-black rounded-3xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
+            style={{ maxHeight: minimized ? '60px' : '90vh' }}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-800 text-white p-5 flex justify-between items-center">
+            <div className="bg-gradient-to-r from-blue-800 text-white p-5 flex justify-between items-center flex-shrink-0 pointer-events-auto">
               <h3 className="font-semibold text-lg md:text-xl">Fitness Chatbot</h3>
-              <button onClick={() => setOpen(false)}>
-                <X className="w-6 h-6 md:w-7 md:h-7" />
-              </button>
+              <div className="flex items-center gap-2">
+                {!minimized && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        saveChatHistory();
+                      }}
+                      disabled={savingChat}
+                      className="p-2 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 cursor-pointer"
+                      title="Save chat"
+                      type="button"
+                    >
+                      <Save className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        clearChatHistory();
+                      }}
+                      className="p-2 hover:bg-blue-700 rounded-lg transition cursor-pointer"
+                      title="Clear chat"
+                      type="button"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setMinimized(!minimized);
+                  }}
+                  className="p-2 hover:bg-blue-700 rounded-lg transition cursor-pointer"
+                  title={minimized ? "Maximize" : "Minimize"}
+                  type="button"
+                >
+                  {minimized ? (
+                    <Maximize2 className="w-5 h-5" />
+                  ) : (
+                    <Minimize2 className="w-5 h-5" />
+                  )}
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpen(false);
+                  }} 
+                  title="Close"
+                  type="button"
+                  className="cursor-pointer"
+                >
+                  <X className="w-6 h-6 md:w-7 md:h-7" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
-            <div className="p-5 flex-1 overflow-y-auto h-[360px] sm:h-[400px] md:h-[450px] lg:h-[500px] space-y-3">
+            <div 
+              ref={messagesContainerRef}
+              className={`p-5 flex-1 overflow-y-auto space-y-3 transition-all duration-300 relative ${
+                minimized 
+                  ? "h-0 overflow-hidden pointer-events-none" 
+                  : "h-[360px] sm:h-[400px] md:h-[450px] lg:h-[500px]"
+              }`}
+              style={{ 
+                scrollBehavior: 'smooth',
+                WebkitOverflowScrolling: 'touch'
+              }}
+            >
+              {/* Scroll to top button - only show when scrolled down */}
+              {!minimized && showScrollTop && (
+                <div className="sticky top-2 z-20 flex justify-end pointer-events-none">
+                  <button
+                    onClick={scrollToTop}
+                    className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white p-2 rounded-full shadow-lg transition backdrop-blur-sm bg-opacity-90 pointer-events-auto cursor-pointer"
+                    title="Scroll to top"
+                    type="button"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
                   className={`${msg.sender === "user" ? "text-right" : "text-left"}`}
                 >
                   {msg.type === "text" && (
-                    <div
-                      className={`inline-block p-3 md:p-4 rounded-2xl max-w-[80%] ${
-                        msg.sender === "user"
-                          ? "bg-blue-700 text-white"
-                          : "bg-green-700 text-white"
-                      }`}
-                    >
-                      {msg.text}
+                    <div className={`${msg.sender === "user" ? "text-right" : "text-left"}`}>
+                      <div
+                        className={`inline-block p-3 md:p-4 rounded-2xl max-w-[80%] ${
+                          msg.sender === "user"
+                            ? "bg-blue-700 text-white"
+                            : "bg-green-700 text-white"
+                        } ${
+                          msg.text && msg.text.length > 500 ? "whitespace-pre-wrap text-sm max-h-96 overflow-y-auto" : ""
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                      {/* Show option buttons for select-type questions */}
+                      {msg.sender === "bot" && msg.questionType === "select" && msg.options && (
+                        <div className="mt-3 flex flex-wrap gap-2 max-w-full">
+                          {msg.options.map((option, optIdx) => {
+                            // Format option text nicely
+                            const formattedOption = option
+                              .replace(/_/g, ' ')
+                              .split(' ')
+                              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                              .join(' ');
+                            
+                            return (
+                              <button
+                                key={optIdx}
+                                onClick={() => {
+                                  if (!loading && isCollectingDietInfo && currentQuestionIndex >= 0) {
+                                    // Send the option as answer
+                                    const optionText = option.replace('_', ' ');
+                                    const newMsg = { sender: "user", type: "text", text: formattedOption };
+                                    setMessages((prev) => [...prev, newMsg]);
+                                    setInput(""); // Clear input
+                                    processDietAnswer(option, currentQuestionIndex);
+                                  }
+                                }}
+                                className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm md:text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                                disabled={loading || !isCollectingDietInfo || currentQuestionIndex < 0}
+                              >
+                                {formattedOption}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                   {msg.type === "image" && (
@@ -448,10 +741,28 @@ export default function Chatbot() {
                   </div>
                 </div>
               )}
+              
+              {/* Scroll to bottom button - only show when scrolled up */}
+              {!minimized && showScrollBottom && (
+                <div className="sticky bottom-2 z-20 flex justify-end pointer-events-none mt-2">
+                  <button
+                    onClick={scrollToBottom}
+                    className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white p-2 rounded-full shadow-lg transition backdrop-blur-sm bg-opacity-90 pointer-events-auto cursor-pointer"
+                    title="Scroll to bottom"
+                    type="button"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Predefined buttons */}
-            <div className="p-4 flex flex-wrap gap-2 border-t border-gray-700">
+            <div className={`p-4 flex flex-wrap gap-2 border-t border-gray-700 transition-all duration-300 ${
+              minimized ? "hidden" : ""
+            }`}>
               {predefined.map((item, idx) => (
                 <button
                   key={idx}
@@ -464,12 +775,20 @@ export default function Chatbot() {
             </div>
 
             {/* Input + File + Voice */}
-            <div className="p-5 border-t border-gray-700 flex gap-3 items-center">
+            <div className={`p-5 border-t border-gray-700 flex gap-3 items-center transition-all duration-300 ${
+              minimized ? "hidden" : ""
+            }`}>
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !loading && handleSend(input)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !loading && input.trim()) {
+                    const textToSend = input;
+                    setInput(""); // Clear input immediately
+                    handleSend(textToSend);
+                  }
+                }}
                 placeholder="Type a message..."
                 disabled={loading}
                 className="flex-1 bg-gray-800 text-white rounded-3xl px-4 py-3 md:px-5 md:py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
@@ -490,7 +809,11 @@ export default function Chatbot() {
                 <Mic className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               <button
-                onClick={() => handleSend(input)}
+                onClick={() => {
+                  const textToSend = input;
+                  setInput(""); // Clear input immediately
+                  handleSend(textToSend);
+                }}
                 className="bg-green-600 px-5 py-3 md:px-6 md:py-4 rounded-2xl text-white hover:bg-green-500 transition"
               >
                 Send
