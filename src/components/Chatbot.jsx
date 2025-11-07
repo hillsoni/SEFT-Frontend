@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Paperclip, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { chatbotAPI } from "../api";
+import { extractUserInfo } from "../utils/infoExtractor";
+import { useChatbot } from "../context/ChatbotContext";
 
 export default function Chatbot() {
   const [open, setOpen] = useState(false);
@@ -11,13 +13,32 @@ export default function Chatbot() {
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const mediaRef = useRef(null);
+  const dietInfoRef = useRef({});
+  const { updateExtractedInfo, extractedInfo } = useChatbot();
+  
+  // Conversation state for diet plan generation
+  const [isCollectingDietInfo, setIsCollectingDietInfo] = useState(false);
+  const [dietInfoCollected, setDietInfoCollected] = useState({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(-1);
+  
+  // Required fields for diet plan generation
+  const dietQuestions = [
+    { key: 'age', question: "What's your age? (in years)", type: 'number' },
+    { key: 'gender', question: "What's your gender? (male/female/other)", type: 'select', options: ['male', 'female', 'other'] },
+    { key: 'weight', question: "What's your weight? (in kg)", type: 'number' },
+    { key: 'height', question: "What's your height? (in cm)", type: 'number' },
+    { key: 'activity_level', question: "What's your activity level? (sedentary/light/moderate/active/very_active)", type: 'select', options: ['sedentary', 'light', 'moderate', 'active', 'very_active'] },
+    { key: 'goal', question: "What's your fitness goal? (weight_loss/weight_gain/muscle_gain/maintenance)", type: 'select', options: ['weight_loss', 'weight_gain', 'muscle_gain', 'maintenance'] },
+    { key: 'diet_type', question: "What's your preferred diet type? (vegetarian/non_vegetarian/vegan/keto/balanced)", type: 'select', options: ['vegetarian', 'non_vegetarian', 'vegan', 'keto', 'balanced'] },
+    { key: 'duration', question: "What duration would you like? (1_week/1_month/3_months/6_months)", type: 'select', options: ['1_week', '1_month', '3_months', '6_months'] },
+  ];
 
   // Predefined suggestions
   const predefined = [
+    "Generate Diet Plan",
     "View my Goals",
     "Start Meditation",
     "Start Yoga",
-    "Diet Plan Help",
     "Challenges",
   ];
 
@@ -28,10 +49,165 @@ export default function Chatbot() {
       {
         sender: "bot",
         type: "text",
-        text: "Hi! I'm your AI Fitness Assistant 🤖. I can help you with diet and nutrition questions. How can I help you today?",
+        text: "Hi! I'm your AI Fitness Assistant 🤖. I can help you with fitness, diet, workouts, and yoga questions. Say 'generate diet plan' and I'll guide you through creating a personalized diet plan! How can I help you today?",
       },
     ]);
   }, []);
+
+  // Start diet plan collection flow
+  const startDietPlanCollection = () => {
+    setIsCollectingDietInfo(true);
+    setCurrentQuestionIndex(0);
+    setDietInfoCollected({});
+    dietInfoRef.current = {};
+    
+    const welcomeMsg = {
+      sender: "bot",
+      type: "text",
+      text: "Great! Let's create your personalized diet plan 🥗. I'll ask you a few questions to customize it perfectly for you.",
+    };
+    setMessages((prev) => [...prev, welcomeMsg]);
+    
+    // Ask first question
+    setTimeout(() => {
+      askNextQuestion(0);
+    }, 500);
+  };
+
+  // Ask the next question in sequence
+  const askNextQuestion = (index) => {
+    if (index >= dietQuestions.length) {
+      // All questions answered, generate plan
+      generateDietPlanFromCollectedInfo();
+      return;
+    }
+
+    const question = dietQuestions[index];
+    const questionMsg = {
+      sender: "bot",
+      type: "text",
+      text: `${question.question}`,
+    };
+    setMessages((prev) => [...prev, questionMsg]);
+    setCurrentQuestionIndex(index);
+  };
+
+  // Process answer and move to next question
+  const processDietAnswer = (answer, questionIndex) => {
+    const question = dietQuestions[questionIndex];
+    let value = answer.trim();
+
+    // Validate and parse answer based on type
+    if (question.type === 'number') {
+      // Extract number from text (e.g., "I'm 25" -> 25)
+      const numMatch = value.match(/(\d+(?:\.\d+)?)/);
+      if (numMatch) {
+        value = parseFloat(numMatch[1]);
+      } else {
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) {
+          const errorMsg = {
+            sender: "bot",
+            type: "text",
+            text: `Please provide a valid number for ${question.key.replace('_', ' ')}.`,
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+          return false;
+        }
+        value = numValue;
+      }
+    } else if (question.type === 'select') {
+      const lowerValue = value.toLowerCase();
+      const matchedOption = question.options.find(opt => 
+        lowerValue.includes(opt.toLowerCase()) || opt.toLowerCase().includes(lowerValue)
+      );
+      if (!matchedOption) {
+        const errorMsg = {
+          sender: "bot",
+          type: "text",
+          text: `Please choose one of: ${question.options.join(', ')}`,
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        return false;
+      }
+      value = matchedOption;
+    }
+
+    // Save the answer
+    const updated = { ...dietInfoCollected, [question.key]: value };
+    setDietInfoCollected(updated);
+    dietInfoRef.current = updated;
+    updateExtractedInfo({ [question.key]: value });
+
+    // Confirm and move to next question
+    const confirmMsg = {
+      sender: "bot",
+      type: "text",
+      text: `Got it! ${question.key.replace('_', ' ')}: ${value} ✓`,
+    };
+    setMessages((prev) => [...prev, confirmMsg]);
+
+    // Ask next question
+    setTimeout(() => {
+      askNextQuestion(questionIndex + 1);
+    }, 500);
+
+    return true;
+  };
+
+  // Generate diet plan when all info is collected
+  const generateDietPlanFromCollectedInfo = async () => {
+    const generatingMsg = {
+      sender: "bot",
+      type: "text",
+      text: "Perfect! I have all the information I need. Let me generate your personalized diet plan... 🍎✨",
+    };
+    setMessages((prev) => [...prev, generatingMsg]);
+    setLoading(true);
+
+    // Use ref to get the latest collected info
+    const planData = { ...dietInfoRef.current };
+
+    try {
+      // Import dietAPI dynamically to avoid circular dependencies
+      const { dietAPI } = await import("../api");
+      
+      const response = await dietAPI.generate(planData);
+      const dietPlan = response.data.diet_plan;
+
+      const successMsg = {
+        sender: "bot",
+        type: "text",
+        text: "🎉 Your personalized diet plan has been generated successfully! I'm redirecting you to the Diet page to see your plan. Would you like me to help you with anything else?",
+      };
+      setMessages((prev) => [...prev, successMsg]);
+
+      // Update extracted info with all collected data
+      updateExtractedInfo(planData);
+
+      // Navigate to diet page after a short delay
+      setTimeout(() => {
+        window.location.href = "/diet";
+      }, 2000);
+
+      setIsCollectingDietInfo(false);
+      setCurrentQuestionIndex(-1);
+      setDietInfoCollected({});
+      dietInfoRef.current = {};
+    } catch (error) {
+      console.error("Diet plan generation error:", error);
+      const errorMsg = {
+        sender: "bot",
+        type: "text",
+        text: `Sorry, I couldn't generate your diet plan. ${error.response?.data?.error || error.message || "Please try again later."}`,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+      setIsCollectingDietInfo(false);
+      setCurrentQuestionIndex(-1);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadChatHistory = async () => {
     try {
@@ -62,8 +238,26 @@ export default function Chatbot() {
   const handleSend = async (text, type = "text") => {
     if (!text || loading) return;
 
-    // Handle navigation commands (don't send to API)
     const lowerText = text.toLowerCase();
+
+    // Check if user wants to generate diet plan
+    if (lowerText.includes('generate diet plan') || lowerText.includes('create diet plan') || 
+        lowerText.includes('diet plan') && (lowerText.includes('generate') || lowerText.includes('create') || lowerText.includes('make'))) {
+      const newMsg = { sender: "user", type, text };
+      setMessages((prev) => [...prev, newMsg]);
+      startDietPlanCollection();
+      return;
+    }
+
+    // If collecting diet info, process as answer
+    if (isCollectingDietInfo && currentQuestionIndex >= 0) {
+      const newMsg = { sender: "user", type, text };
+      setMessages((prev) => [...prev, newMsg]);
+      processDietAnswer(text, currentQuestionIndex);
+      return;
+    }
+
+    // Handle navigation commands (don't send to API)
     if (
       lowerText === "view my goals" ||
       lowerText === "start meditation" ||
@@ -110,10 +304,26 @@ export default function Chatbot() {
       setInput("");
       setLoading(true);
 
+      // Extract user information from the message (only if not in diet collection mode)
+      if (!isCollectingDietInfo) {
+        const extractedInfo = extractUserInfo(text);
+        if (Object.keys(extractedInfo).length > 0) {
+          updateExtractedInfo(extractedInfo);
+          
+          // Show confirmation message
+          const confirmationMsg = {
+            sender: "bot",
+            type: "text",
+            text: `Got it! I've saved: ${Object.entries(extractedInfo).map(([key, value]) => `${key.replace('_', ' ')}: ${value}`).join(', ')}. This will be used when you generate your diet plan! 📝`,
+          };
+          setMessages((prev) => [...prev, confirmationMsg]);
+        }
+      }
+
       try {
         const response = await chatbotAPI.sendQuery({
           question: text,
-          query_type: "diet",
+          query_type: "fitness",
         });
 
         const botResponse = {
@@ -132,7 +342,7 @@ export default function Chatbot() {
           text:
             error.response?.data?.error ||
             error.response?.data?.message ||
-            "I'm sorry, I can only answer diet and nutrition questions. Please ask me about food, meals, or nutrition! 🍎",
+            "I'm sorry, I can only answer fitness, diet, workout, and health-related questions. Please ask me something related to your fitness journey! 💪",
         };
         setMessages((prev) => [...prev, errorMsg]);
       } finally {
