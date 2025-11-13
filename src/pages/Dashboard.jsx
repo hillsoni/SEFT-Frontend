@@ -52,7 +52,7 @@ export default function Dashboard({ userData }) {
         <h1 className="text-3xl font-bold">
           Welcome back, <span className="text-orange-400">{user.name}</span> 👋
         </h1>
-        <p className="text-gray-400">Here’s your fitness journey progress 🚀</p>
+        <p className="text-gray-400">Here's your fitness journey progress 🚀</p>
       </motion.div>
 
       {/* Stats */}

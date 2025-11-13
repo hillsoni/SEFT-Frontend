@@ -1,6 +1,6 @@
 // pages/Diet.js
 import React, { useState, useEffect } from "react";
-import { dietAPI } from "../api";
+import { dietAPI, userAPI, authAPI } from "../api";
 import Swal from "sweetalert2";
 import { useChatbot } from "../context/ChatbotContext";
 
@@ -8,6 +8,7 @@ export function DietPlanPage() {
   const [loading, setLoading] = useState(false);
   const [dietPlan, setDietPlan] = useState(null);
   const [showResults, setShowResults] = useState(false);
+  const [loadingUserData, setLoadingUserData] = useState(true);
   const { extractedInfo } = useChatbot();
   const [formData, setFormData] = useState({
     age: "",
@@ -24,6 +25,43 @@ export function DietPlanPage() {
     duration: "",
     health_conditions: [],
   });
+
+  // Load user's height and weight from database
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem("user"));
+        if (user && user.id) {
+          try {
+            const response = await userAPI.getById(user.id);
+            const userData = response.data;
+            if (userData && (userData.height || userData.weight)) {
+              setFormData((prev) => ({
+                ...prev,
+                height: userData.height ? userData.height.toString() : "",
+                weight: userData.weight ? userData.weight.toString() : "",
+              }));
+            }
+          } catch (apiError) {
+            console.error("Error loading user data from API:", apiError);
+            // Fallback: try to get from stored user object
+            if (user.height || user.weight) {
+              setFormData((prev) => ({
+                ...prev,
+                height: user.height ? user.height.toString() : "",
+                weight: user.weight ? user.weight.toString() : "",
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      } finally {
+        setLoadingUserData(false);
+      }
+    };
+    loadUserData();
+  }, []);
 
   // Apply extracted info from chatbot to form fields
   useEffect(() => {
@@ -61,6 +99,23 @@ export function DietPlanPage() {
     setLoading(true);
 
     try {
+      // Save height and weight to user profile (non-blocking)
+      try {
+        const user = JSON.parse(localStorage.getItem("user"));
+        if (user && user.id) {
+          userAPI.updateProfile({
+            height: parseFloat(formData.height) || null,
+            weight: parseFloat(formData.weight) || null,
+          }).catch((error) => {
+            console.error("Error saving height/weight:", error);
+            // Continue even if save fails
+          });
+        }
+      } catch (error) {
+        console.error("Error accessing user data:", error);
+        // Continue with diet plan generation
+      }
+
       // Convert form data to match backend API format
       const apiData = {
         age: parseInt(formData.age),

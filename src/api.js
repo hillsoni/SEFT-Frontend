@@ -127,6 +127,24 @@ export const userAPI = {
   delete: (id) => api.delete(`/users/${id}`),
   getStats: (id) => api.get(`/users/${id}/stats`),
   search: (params) => api.get("/users/search", { params }),
+  updateProfile: (data) => {
+    const token = localStorage.getItem("access_token");
+    const userId = JSON.parse(localStorage.getItem("user"))?.id;
+    if (userId) {
+      return api.put(`/users/${userId}`, data);
+    }
+    return Promise.reject(new Error("User not found"));
+  },
+};
+
+// ============= CHALLENGE API =============
+export const challengeAPI = {
+  getAll: () => api.get("/challenges/"),
+  generate: (data) => api.post("/challenges/generate", data),
+  join: (challengeId) => api.post(`/challenges/${challengeId}/join`),
+  markProgress: (challengeId) => api.post(`/challenges/${challengeId}/progress`),
+  getMyChallenges: () => api.get("/challenges/my-challenges"),
+  getProgressHistory: (challengeId) => api.get(`/challenges/${challengeId}/history`),
 };
 
 export default api;
