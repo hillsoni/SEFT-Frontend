@@ -1,11 +1,13 @@
+// src/pages/Dashboard.jsx - Enhanced with Challenge Activity Feed
 import { useEffect, useState } from "react";
-import { Dumbbell, Calendar, Target, Flame, Clock, ArrowRight, ArrowLeft } from "lucide-react";
+import { Dumbbell, Calendar, Target, Flame, Clock, ArrowRight, ArrowLeft, Trophy, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard({ userData }) {
   const { user: authUser, loading } = useAuth();
   const [user, setUser] = useState(null);
+  const [activityFeed, setActivityFeed] = useState([]);
 
   useEffect(() => {
     if (userData) {
@@ -20,6 +22,16 @@ export default function Dashboard({ userData }) {
         } catch (e) {
           console.error("Failed to parse stored user:", e);
         }
+      }
+    }
+
+    // Load challenge activity feed
+    const storedActivity = localStorage.getItem("userActivity");
+    if (storedActivity) {
+      try {
+        setActivityFeed(JSON.parse(storedActivity));
+      } catch (e) {
+        console.error("Failed to parse activity feed:", e);
       }
     }
   }, [userData, authUser]);
@@ -41,6 +53,11 @@ export default function Dashboard({ userData }) {
   const pastActivities = user.activity?.filter(a => a.date < today) || [];
   const upcomingActivities = user.activity?.filter(a => a.date >= today) || [];
 
+  // Calculate challenge stats
+  const joinedChallenges = JSON.parse(localStorage.getItem("joinedChallenges")) || [];
+  const completedChallenges = joinedChallenges.filter(c => c.completed || c.progress >= 100).length;
+  const activeChallenges = joinedChallenges.filter(c => !c.completed && c.progress < 100).length;
+
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-10 mt-8 space-y-10">
       {/* Header */}
@@ -56,12 +73,66 @@ export default function Dashboard({ userData }) {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-10">
         <StatCard icon={<Dumbbell />} label="Workouts" value={user.workouts || 0} color="from-pink-500 to-purple-600" />
         <StatCard icon={<Flame />} label="Calories" value={`${user.calories || 0} kcal`} color="from-orange-400 to-red-500" />
         <StatCard icon={<Clock />} label="Active Minutes" value={`${user.activeMinutes || 0} min`} color="from-green-400 to-emerald-600" />
         <StatCard icon={<Target />} label="Weight" value={`${user.weight || "—"} kg`} color="from-blue-400 to-indigo-600" />
+        <StatCard icon={<Trophy />} label="Challenges" value={`${completedChallenges}/${joinedChallenges.length}`} color="from-yellow-400 to-amber-500" />
       </div>
+
+      {/* Challenge Activity Feed */}
+      {activityFeed.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-neutral-900 p-6 rounded-2xl shadow-lg mb-10"
+        >
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <TrendingUp className="text-yellow-400" /> Challenge Activity Feed
+          </h2>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {activityFeed.slice(0, 20).map((activity, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="bg-neutral-800 px-4 py-3 rounded-lg hover:bg-neutral-700 transition border-l-4 border-yellow-400"
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-gray-300 font-medium">
+                      ✅ Tapped: <span className="text-yellow-400">{activity.title}</span>
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Day {activity.daysCompleted}/{activity.totalDays} • {activity.progress}% complete
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">{activity.date}</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Active Challenges Summary */}
+      {activeChallenges > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 p-6 rounded-2xl shadow-lg mb-10"
+        >
+          <h2 className="text-xl font-semibold mb-3 flex items-center gap-2 text-yellow-400">
+            <Trophy /> Active Challenges
+          </h2>
+          <p className="text-gray-300">
+            You have <span className="font-bold text-yellow-400">{activeChallenges}</span> active challenge{activeChallenges !== 1 ? 's' : ''} in progress. 
+            Keep up the momentum! 🔥
+          </p>
+        </motion.div>
+      )}
 
       {/* Goals + Schedule */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
