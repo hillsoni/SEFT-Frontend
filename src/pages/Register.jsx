@@ -12,6 +12,10 @@ const Register = () => {
     email: "",
     password: "",
     mobile_number: "",
+    height: "",      // ✅ Added
+    weight: "",      // ✅ Added
+    age: "",         // ✅ Added (optional but recommended)
+    gender: "",      // ✅ Added (optional but recommended)
   });
   const [loading, setLoading] = useState(false);
 
@@ -65,13 +69,14 @@ const Register = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white py-8 px-4">
       <form
         onSubmit={handleSubmit}
         className="bg-neutral-900 p-8 rounded-2xl shadow-lg w-full max-w-md"
       >
         <h2 className="text-3xl font-bold mb-6 text-center">Create Account ✨</h2>
 
+        {/* Username */}
         <input
           type="text"
           name="username"
@@ -83,6 +88,7 @@ const Register = () => {
           className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
+        {/* Email */}
         <input
           type="email"
           name="email"
@@ -94,6 +100,7 @@ const Register = () => {
           className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
+        {/* Password */}
         <input
           type="password"
           name="password"
@@ -105,6 +112,7 @@ const Register = () => {
           className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
 
+        {/* Mobile Number */}
         <input
           type="tel"
           name="mobile_number"
@@ -114,6 +122,65 @@ const Register = () => {
           disabled={loading}
           className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
         />
+
+        {/* Age */}
+        <input
+          type="number"
+          name="age"
+          placeholder="Age (Optional)"
+          value={formData.age}
+          onChange={handleChange}
+          min="10"
+          max="120"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
+        />
+
+        {/* Gender */}
+        <select
+          name="gender"
+          value={formData.gender}
+          onChange={handleChange}
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
+        >
+          <option value="">Select Gender (Optional)</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+
+        {/* Height - REQUIRED for fitness app */}
+        <input
+          type="number"
+          name="height"
+          placeholder="Height (cm) *"
+          value={formData.height}
+          onChange={handleChange}
+          required
+          min="100"
+          max="250"
+          step="0.1"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
+        />
+
+        {/* Weight - REQUIRED for fitness app */}
+        <input
+          type="number"
+          name="weight"
+          placeholder="Weight (kg) *"
+          value={formData.weight}
+          onChange={handleChange}
+          required
+          min="30"
+          max="300"
+          step="0.1"
+          disabled={loading}
+          className="w-full p-3 mb-4 rounded-lg bg-neutral-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
+        />
+
+        <p className="text-xs text-gray-400 mb-4">* Required fields for personalized fitness plans</p>
 
         <button
           type="submit"

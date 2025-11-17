@@ -28,6 +28,9 @@ const Login = () => {
       const result = await login(email, password);
 
       if (result.success) {
+        // ✅ REMOVED: No more height/weight prompt on login
+        // They are now collected during registration only
+        
         if (remember) {
           localStorage.setItem("rememberMe", JSON.stringify({ email }));
         } else {
@@ -41,6 +44,8 @@ const Login = () => {
           confirmButtonText: "OK",
           background: "#1f2937",
           color: "#fff",
+          timer: 2000,
+          timerProgressBar: true,
         });
 
         navigate("/dashboard");

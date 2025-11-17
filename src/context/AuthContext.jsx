@@ -125,17 +125,22 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = async (userData) => {
     try {
-      const response = await authAPI.updateProfile(userData);
-      const updatedUser = response.data.user;
-      setUser(updatedUser);
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      return { success: true, user: updatedUser };
-    } catch (error) {
-      const errorMessage =
-        error.response?.data?.error || error.message || "Update failed";
-      return { success: false, error: errorMessage };
-    }
-  };
+    const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const updatedUserData = { ...currentUser, ...userData };
+    
+    const response = await authAPI.updateProfile(userData);
+    const updatedUser = response.data.user || updatedUserData;
+    
+    setUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    
+    return { success: true, user: updatedUser };
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.error || error.message || "Update failed";
+    return { success: false, error: errorMessage };
+  }
+};
 
   const changePassword = async (oldPassword, newPassword) => {
     try {

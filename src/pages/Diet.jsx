@@ -1,15 +1,16 @@
-// pages/Diet.js
+// pages/Diet.jsx
 import React, { useState, useEffect } from "react";
-import { dietAPI, userAPI, authAPI } from "../api";
+import { dietAPI } from "../api";
 import Swal from "sweetalert2";
 import { useChatbot } from "../context/ChatbotContext";
+import DynamicDietPlanDisplay from "../components/DynamicDietPlanDisplay";
 
 export function DietPlanPage() {
   const [loading, setLoading] = useState(false);
   const [dietPlan, setDietPlan] = useState(null);
   const [showResults, setShowResults] = useState(false);
-  const [loadingUserData, setLoadingUserData] = useState(true);
   const { extractedInfo } = useChatbot();
+  
   const [formData, setFormData] = useState({
     age: "",
     gender: "",
@@ -26,44 +27,28 @@ export function DietPlanPage() {
     health_conditions: [],
   });
 
-  // Load user's height and weight from database
+  // Load user's height and weight from localStorage
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (user && user.id) {
-          try {
-            const response = await userAPI.getById(user.id);
-            const userData = response.data;
-            if (userData && (userData.height || userData.weight)) {
-              setFormData((prev) => ({
-                ...prev,
-                height: userData.height ? userData.height.toString() : "",
-                weight: userData.weight ? userData.weight.toString() : "",
-              }));
-            }
-          } catch (apiError) {
-            console.error("Error loading user data from API:", apiError);
-            // Fallback: try to get from stored user object
-            if (user.height || user.weight) {
-              setFormData((prev) => ({
-                ...prev,
-                height: user.height ? user.height.toString() : "",
-                weight: user.weight ? user.weight.toString() : "",
-              }));
-            }
-          }
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        if (user.height || user.weight) {
+          setFormData((prev) => ({
+            ...prev,
+            height: user.height ? user.height.toString() : "",
+            weight: user.weight ? user.weight.toString() : "",
+            age: user.age ? user.age.toString() : "",
+            gender: user.gender || "",
+          }));
         }
       } catch (error) {
         console.error("Error loading user data:", error);
-      } finally {
-        setLoadingUserData(false);
       }
     };
     loadUserData();
   }, []);
 
-  // Apply extracted info from chatbot to form fields
+  // Apply extracted info from chatbot
   useEffect(() => {
     if (Object.keys(extractedInfo).length > 0) {
       setFormData((prev) => {
@@ -99,23 +84,6 @@ export function DietPlanPage() {
     setLoading(true);
 
     try {
-      // Save height and weight to user profile (non-blocking)
-      try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (user && user.id) {
-          userAPI.updateProfile({
-            height: parseFloat(formData.height) || null,
-            weight: parseFloat(formData.weight) || null,
-          }).catch((error) => {
-            console.error("Error saving height/weight:", error);
-            // Continue even if save fails
-          });
-        }
-      } catch (error) {
-        console.error("Error accessing user data:", error);
-        // Continue with diet plan generation
-      }
-
       // Convert form data to match backend API format
       const apiData = {
         age: parseInt(formData.age),
@@ -135,16 +103,38 @@ export function DietPlanPage() {
         }),
       };
 
+      console.log("Sending diet plan request:", apiData);
+
+      // Call backend API
       const response = await dietAPI.generate(apiData);
+      console.log("Received response:", response.data);
+
+      // Extract the diet plan from response
+      // Backend should return: { diet_plan: { id, plan, created_at, ... } }
       const generatedPlan = response.data.diet_plan;
 
-      // Store the diet plan and show results on same page
+      // The 'plan' field contains the Gemini-generated data
+      // It could be a JSON object or a string, handle both
+      let planData = generatedPlan.plan;
+      
+      // If plan is a string, try to parse it
+      if (typeof planData === 'string') {
+        try {
+          planData = JSON.parse(planData);
+        } catch (e) {
+          // If parsing fails, keep it as string
+          console.log("Plan is a text string, will display as-is");
+        }
+      }
+
+      // Store the diet plan
       setDietPlan({
         formData: formData,
-        plan: generatedPlan.plan,
+        plan: planData, // This is what Gemini returned (JSON or text)
         id: generatedPlan.id,
         created_at: generatedPlan.created_at
       });
+      
       setShowResults(true);
       
       // Scroll to results
@@ -154,6 +144,7 @@ export function DietPlanPage() {
           resultsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }, 100);
+
     } catch (error) {
       console.error("Diet plan generation error:", error);
       Swal.fire({
@@ -162,7 +153,7 @@ export function DietPlanPage() {
         text:
           error.response?.data?.error ||
           error.message ||
-          "Failed to generate diet plan. Please try again.",
+          "Failed to generate diet plan. Please try again later.",
         confirmButtonText: "OK",
         background: "#1f2937",
         color: "#fff",
@@ -173,7 +164,7 @@ export function DietPlanPage() {
   };
 
   return (
-    <section className="px-6 py-16 max-w-4xl mx-auto mt-8 ">
+    <section className="px-6 py-16 max-w-7xl mx-auto mt-8">
       <h1 className="text-4xl font-bold mb-10 text-center bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 bg-clip-text text-transparent">
         Build Your Personalized Diet Plan 🥗
       </h1>
@@ -184,7 +175,7 @@ export function DietPlanPage() {
       >
         {/* Age */}
         <div>
-          <label className="block text-gray-300 mb-2">Age</label>
+          <label className="block text-gray-300 mb-2">Age *</label>
           <input
             type="number"
             name="age"
@@ -197,7 +188,7 @@ export function DietPlanPage() {
 
         {/* Gender */}
         <div>
-          <label className="block text-gray-300 mb-2">Gender</label>
+          <label className="block text-gray-300 mb-2">Gender *</label>
           <select
             name="gender"
             value={formData.gender}
@@ -214,7 +205,7 @@ export function DietPlanPage() {
 
         {/* Weight */}
         <div>
-          <label className="block text-gray-300 mb-2">Weight (kg)</label>
+          <label className="block text-gray-300 mb-2">Weight (kg) *</label>
           <input
             type="number"
             name="weight"
@@ -227,7 +218,7 @@ export function DietPlanPage() {
 
         {/* Height */}
         <div>
-          <label className="block text-gray-300 mb-2">Height (cm)</label>
+          <label className="block text-gray-300 mb-2">Height (cm) *</label>
           <input
             type="number"
             name="height"
@@ -240,7 +231,7 @@ export function DietPlanPage() {
 
         {/* Activity Level */}
         <div>
-          <label className="block text-gray-300 mb-2">Activity Level</label>
+          <label className="block text-gray-300 mb-2">Activity Level *</label>
           <select
             name="activity_level"
             value={formData.activity_level}
@@ -259,7 +250,7 @@ export function DietPlanPage() {
 
         {/* Goal */}
         <div>
-          <label className="block text-gray-300 mb-2">Goal</label>
+          <label className="block text-gray-300 mb-2">Goal *</label>
           <select
             name="goal"
             value={formData.goal}
@@ -277,7 +268,7 @@ export function DietPlanPage() {
 
         {/* Diet Type */}
         <div>
-          <label className="block text-gray-300 mb-2">Preferred Diet Type</label>
+          <label className="block text-gray-300 mb-2">Preferred Diet Type *</label>
           <select
             name="diet_type"
             value={formData.diet_type}
@@ -294,7 +285,7 @@ export function DietPlanPage() {
           </select>
         </div>
 
-        {/* Vegetarian Type */}
+        {/* Optional: Vegetarian Type */}
         {formData.diet_type === "vegetarian" && (
           <div>
             <label className="block text-gray-300 mb-2">Vegetarian Type</label>
@@ -312,9 +303,9 @@ export function DietPlanPage() {
           </div>
         )}
 
-        {/* Cuisine */}
+        {/* Optional: Cuisine */}
         <div>
-          <label className="block text-gray-300 mb-2">Preferred Cuisine</label>
+          <label className="block text-gray-300 mb-2">Preferred Cuisine (Optional)</label>
           <select
             name="cuisine"
             value={formData.cuisine}
@@ -330,16 +321,16 @@ export function DietPlanPage() {
           </select>
         </div>
 
-        {/* Taste */}
+        {/* Optional: Taste */}
         <div>
-          <label className="block text-gray-300 mb-2">Taste Preference</label>
+          <label className="block text-gray-300 mb-2">Taste Preference (Optional)</label>
           <select
             name="taste"
             value={formData.taste}
             onChange={handleChange}
             className="w-full px-4 py-2 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-pink-500"
           >
-            <option value="">Select Taste Preference</option>
+            <option value="">Select Taste</option>
             <option value="sweet">Sweet</option>
             <option value="spicy">Spicy</option>
             <option value="salty">Salty</option>
@@ -349,26 +340,26 @@ export function DietPlanPage() {
           </select>
         </div>
 
-        {/* Mood-Based Food */}
+        {/* Optional: Mood Food */}
         <div>
-          <label className="block text-gray-300 mb-2">Mood-Based Food Preference</label>
+          <label className="block text-gray-300 mb-2">Mood-Based Food (Optional)</label>
           <select
             name="mood_food"
             value={formData.mood_food}
             onChange={handleChange}
             className="w-full px-4 py-2 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-purple-500"
           >
-            <option value="">Select Mood Food Type</option>
+            <option value="">Select Mood Food</option>
             <option value="calming">Foods to keep calm & reduce anger</option>
             <option value="energizing">Foods to boost energy & focus</option>
             <option value="digestive">Foods for better digestion</option>
-            <option value="immunity">Foods for immunity & overall wellness</option>
+            <option value="immunity">Foods for immunity & wellness</option>
           </select>
         </div>
 
         {/* Duration */}
         <div>
-          <label className="block text-gray-300 mb-2">Plan Duration</label>
+          <label className="block text-gray-300 mb-2">Plan Duration *</label>
           <select
             name="duration"
             value={formData.duration}
@@ -412,7 +403,7 @@ export function DietPlanPage() {
           {loading ? (
             <div className="flex items-center justify-center space-x-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              <span>Generating Plan...</span>
+              <span>Generating Your Plan...</span>
             </div>
           ) : (
             "Generate Diet Plan 🚀"
@@ -420,7 +411,7 @@ export function DietPlanPage() {
         </button>
       </form>
 
-      {/* Diet Plan Results */}
+      {/* Diet Plan Results - Only show when data is available */}
       {showResults && dietPlan && (
         <div id="diet-results" className="mt-12 space-y-8">
           <div className="flex justify-between items-center">
@@ -428,16 +419,19 @@ export function DietPlanPage() {
               Your Personalized Diet Plan 🍴
             </h2>
             <button
-              onClick={() => setShowResults(false)}
+              onClick={() => {
+                setShowResults(false);
+                setDietPlan(null);
+              }}
               className="text-gray-400 hover:text-white transition"
             >
               ✕ Close
             </button>
           </div>
 
-          {/* Summary Card */}
+          {/* User Info Summary */}
           <div className="bg-gray-900 p-8 rounded-3xl shadow-xl border border-gray-700">
-            <h3 className="text-2xl font-semibold mb-6 text-pink-400">📋 Summary</h3>
+            <h3 className="text-2xl font-semibold mb-6 text-pink-400">📋 Your Profile</h3>
             <ul className="text-gray-300 grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-8">
               <li>👤 Age: {dietPlan.formData.age}</li>
               <li>⚧ Gender: {dietPlan.formData.gender}</li>
@@ -457,42 +451,18 @@ export function DietPlanPage() {
             </ul>
           </div>
 
-          {/* AI Generated Meal Plan */}
-          <div className="bg-gray-800 p-8 rounded-3xl shadow-xl">
-            <h3 className="text-2xl font-semibold mb-6 text-orange-400">🥗 AI-Generated Meal Plan</h3>
-            <div className="prose prose-invert max-w-none">
-              {dietPlan.plan?.meal_plan ? (
-                <div className="text-gray-300 whitespace-pre-wrap bg-gray-900 p-6 rounded-xl border border-gray-700 leading-relaxed">
-                  <div className="text-sm text-gray-400 mb-4">Generated by Gemini AI ✨</div>
-                  {typeof dietPlan.plan.meal_plan === 'string' 
-                    ? <div className="text-base">{dietPlan.plan.meal_plan}</div>
-                    : <pre className="text-sm overflow-x-auto">{JSON.stringify(dietPlan.plan.meal_plan, null, 2)}</pre>}
-                </div>
-              ) : dietPlan.plan?.user_info ? (
-                <div className="text-gray-300 whitespace-pre-wrap bg-gray-900 p-6 rounded-xl border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-4">Generated by Gemini AI ✨</div>
-                  <div className="text-base">
-                    {typeof dietPlan.plan === 'string' 
-                      ? dietPlan.plan 
-                      : JSON.stringify(dietPlan.plan, null, 2)}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-gray-300 whitespace-pre-wrap bg-gray-900 p-6 rounded-xl border border-gray-700">
-                  <div className="text-sm text-gray-400 mb-4">Generated by Gemini AI ✨</div>
-                  <pre className="text-sm overflow-x-auto">{JSON.stringify(dietPlan.plan, null, 2)}</pre>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Dynamic Diet Plan Display - Handles any format */}
+          <DynamicDietPlanDisplay 
+            dietPlan={dietPlan.plan} 
+            userInfo={dietPlan.formData}
+          />
 
           {/* Generate Again Button */}
-          <div className="text-center">
+          <div className="text-center mt-12">
             <button
               onClick={() => {
                 setShowResults(false);
                 setDietPlan(null);
-                // Scroll to top
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 px-10 py-3 rounded-2xl font-semibold hover:scale-105 transition-transform shadow-lg"
